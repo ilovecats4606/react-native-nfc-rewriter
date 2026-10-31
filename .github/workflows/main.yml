@@ -41,7 +41,7 @@ jobs:
         run: npm ci
 
       - name: Install iOS dependencies
-        run: pod install --deployment --project-directory=ios
+        run: pod install --project-directory=ios
 
       - name: Build iOS application
         run: |
