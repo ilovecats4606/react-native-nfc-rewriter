@@ -1,0 +1,85 @@
+
+name: Build iOS IPA
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-ios:
+    name: Build iOS IPA
+    runs-on: xcode-27
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Select Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Select Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+
+      - name: Install CocoaPods
+        run: |
+          gem install cocoapods -v 1.15.2 --no-document
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Install iOS dependencies
+        run: pod install --deployment --project-directory=ios
+
+      - name: Build iOS application
+        run: |
+          xcodebuild \
+            -workspace ios/NfcOpenReader.xcworkspace \
+            -scheme NfcOpenReader \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: Package unsigned IPA
+        run: |
+          APP_PATH="$RUNNER_TEMP/DerivedData/Build/Products/Release-iphoneos/NfcOpenReader.app"
+
+          if [ ! -d "$APP_PATH" ]; then
+            echo "ERROR: Built application not found: $APP_PATH"
+            exit 1
+          fi
+
+          mkdir -p "$RUNNER_TEMP/ipa/Payload"
+          cp -R "$APP_PATH" "$RUNNER_TEMP/ipa/Payload/"
+
+          ditto -c -k --sequesterRsrc --keepParent \
+            "$RUNNER_TEMP/ipa/Payload" \
+            "$RUNNER_TEMP/NfcOpenReader-unsigned.ipa"
+
+          test -s "$RUNNER_TEMP/NfcOpenReader-unsigned.ipa"
+
+          echo "IPA created successfully."
+          ls -lh "$RUNNER_TEMP/NfcOpenReader-unsigned.ipa"
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: NfcOpenReader-iOS-IPA
+          path: ${{ runner.temp }}/NfcOpenReader-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 14
