@@ -16,11 +16,17 @@ permissions:
 jobs:
   build-ios:
     name: Build iOS IPA
-    runs-on: xcode-27
+    runs-on: macos-26
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Check Xcode installation
+        run: |
+          xcode-select -p
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-path
 
       - name: Select Node.js
         uses: actions/setup-node@v4
