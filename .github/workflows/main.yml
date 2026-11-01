@@ -2,46 +2,41 @@
 name: Build iOS IPA
 
 on:
+  workflow_dispatch:
   push:
     branches:
-      - master
-  pull_request:
-    branches:
-      - master
-  workflow_dispatch:
-
-permissions:
-  contents: read
+      - main
 
 jobs:
-  build-ios:
-    name: Build iOS IPA
-    runs-on: macos-26
+  build:
+    runs-on: macos-15
+
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Check Xcode installation
+      - name: Verify Xcode
         run: |
           xcode-select -p
           xcodebuild -version
           xcrun --sdk iphoneos --show-sdk-path
 
-      - name: Select Node.js
+      - name: Set up Node
         uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
 
-      - name: Select Ruby
+      - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.3'
 
       - name: Install CocoaPods
-        run: |
-          gem install cocoapods -v 1.15.2 --no-document
+        run: gem install cocoapods -v 1.15.2 --no-document
 
       - name: Install npm dependencies
         run: npm ci
@@ -49,7 +44,7 @@ jobs:
       - name: Install iOS dependencies
         run: pod install --project-directory=ios
 
-      - name: Build iOS application
+      - name: Build iOS app
         run: |
           xcodebuild \
             -workspace ios/NfcOpenReader.xcworkspace \
@@ -65,27 +60,18 @@ jobs:
         run: |
           APP_PATH="$RUNNER_TEMP/DerivedData/Build/Products/Release-iphoneos/NfcOpenReader.app"
 
-          if [ ! -d "$APP_PATH" ]; then
-            echo "ERROR: Built application not found: $APP_PATH"
-            exit 1
-          fi
+          test -d "$APP_PATH"
 
           mkdir -p "$RUNNER_TEMP/ipa/Payload"
           cp -R "$APP_PATH" "$RUNNER_TEMP/ipa/Payload/"
 
-          ditto -c -k --sequesterRsrc --keepParent \
-            "$RUNNER_TEMP/ipa/Payload" \
-            "$RUNNER_TEMP/NfcOpenReader-unsigned.ipa"
-
-          test -s "$RUNNER_TEMP/NfcOpenReader-unsigned.ipa"
-
-          echo "IPA created successfully."
-          ls -lh "$RUNNER_TEMP/NfcOpenReader-unsigned.ipa"
+          cd "$RUNNER_TEMP/ipa"
+          ditto -c -k --sequesterRsrc --keepParent Payload \
+            "$GITHUB_WORKSPACE/NfcOpenReader-unsigned.ipa"
 
       - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
-          name: NfcOpenReader-iOS-IPA
-          path: ${{ runner.temp }}/NfcOpenReader-unsigned.ipa
+          name: NfcOpenReader-unsigned-ipa
+          path: NfcOpenReader-unsigned.ipa
           if-no-files-found: error
-          retention-days: 14
